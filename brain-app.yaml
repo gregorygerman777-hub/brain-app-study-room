@@ -1,7 +1,7 @@
 dialect: brain-app/v1
 id: study-room
 name: Study Room
-version: 0.1.0
+version: 0.1.1
 description: "Learn a topic with your brain as tutor: explanations, quizzes and saved notes. Starts on quantum computing."
 license: MIT
 author:
