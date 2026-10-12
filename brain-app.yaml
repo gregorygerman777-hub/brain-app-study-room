@@ -1,0 +1,25 @@
+dialect: brain-app/v1
+id: study-room
+name: Study Room
+version: 0.1.0
+description: "Learn a topic with your brain as tutor: explanations, quizzes and saved notes. Starts on quantum computing."
+license: MIT
+author:
+  name: Gregory German
+  contact: gregorygerman777@gmail.com
+  url: https://github.com/gregorygerman777-hub
+repo: https://github.com/gregorygerman777-hub/brain-app-study-room
+tab:
+  label: Study
+  route: /study
+  order: 160
+entries:
+  ui_bundle: dist
+requires_layers:
+  - layer: semantic
+    mode: read
+  - layer: semantic
+    mode: append
+permissions:
+  - llm.invoke
+  - memory.write

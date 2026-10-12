@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Room</title>
+<style>
+:root{--bg:#0e0c0b;--panel:#171412;--line:#2a2420;--text:#e8e0d5;--muted:#8a7d6e;--accent:#c9a96e;--ok:#7fc99c;--err:#e07a6a}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f7f3ec;--panel:#fffdf9;--line:#e2d9cc;--text:#2a2420;--muted:#7a6d5e;--accent:#8a6a2e;--ok:#2f7d4f;--err:#b5452f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 8px;font-weight:600}
+p.lead{color:var(--muted);margin:0 0 24px}
+label{display:block;font-size:13px;color:var(--muted);margin:16px 0 8px}
+input,select,textarea{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+textarea{min-height:160px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+button{background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:8px 16px;font:inherit;cursor:pointer}
+button.primary{background:var(--accent);color:var(--bg)}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-top:16px}
+.status{font-size:13px;color:var(--muted);min-height:24px;margin-top:8px}
+.status.ok{color:var(--ok)}.status.err{color:var(--err)}
+.out{white-space:pre-wrap}
+.sources{font-size:13px;color:var(--muted);margin-top:8px}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li{border-top:1px solid var(--line);padding:8px 0}
+.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<main>
+<h1>Study Room</h1>
+<p class="lead">Pick a topic, get an explanation at your level, then test yourself.</p>
+<div class="grid">
+<div><label for="topic">Topic</label><input id="topic" value="Quantum computing: qubits and superposition"></div>
+<div><label for="level">Level</label><select id="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select></div>
+</div>
+<div class="row"><button class="primary" id="explain">Explain</button><button id="quiz">Quiz me</button><button id="keep" disabled>Save notes to memory</button></div>
+<div class="status" id="status"></div>
+<div class="card out" id="out" hidden></div>
+<div class="card" id="quizbox" hidden>
+<div class="out" id="questions"></div>
+<label for="answers">Your answers</label>
+<textarea id="answers" style="min-height:120px" placeholder="1. ...&#10;2. ..."></textarea>
+<div class="row"><button class="primary" id="check">Check my answers</button></div>
+<div class="out" id="feedback" style="margin-top:16px"></div>
+</div>
+</main>
+<script>
+const Brain = (() => {
+  let n = 0;
+  const pending = new Map();
+  addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    const m = e.data;
+    if (!m || m.type !== 'reply' || !pending.has(m.request_id)) return;
+    const { resolve, reject } = pending.get(m.request_id);
+    pending.delete(m.request_id);
+    m.ok ? resolve(m.result) : reject(m.error || { code: 'unknown' });
+  });
+  function call(type, payload) {
+    return new Promise((resolve, reject) => {
+      if (window.parent === window) {
+        reject({ code: 'no_host', detail: 'Open this app from your brain to use it.' });
+        return;
+      }
+      const id = 'r' + (++n) + '-' + Date.now();
+      pending.set(id, { resolve, reject });
+      window.parent.postMessage({ type, payload, request_id: id }, location.origin);
+    });
+  }
+  return {
+    ask: (messages, max_tokens) => call('llm.complete', max_tokens ? { messages, max_tokens } : { messages }),
+    remember: (layer, content, metadata) => call('memory.write', { layer, content, metadata: metadata || {} }),
+    info: () => call('meta.brain_info'),
+  };
+})();
+function errText(e) {
+  if (!e) return 'Something went wrong.';
+  if (e.detail && typeof e.detail === 'string') return e.detail;
+  return e.code ? 'Error: ' + e.code : String(e);
+}
+function setStatus(el, text, kind) { el.textContent = text; el.className = 'status' + (kind ? ' ' + kind : ''); }
+function store(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
+function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function showSources(el, sources) {
+  if (!sources || !sources.length) { el.textContent = ''; return; }
+  const names = sources.map((s) => s.title || s.doc_name || s.source || s.document || JSON.stringify(s)).slice(0, 8);
+  el.textContent = 'Sources: ' + names.join(', ');
+}
+const $ = (id) => document.getElementById(id);
+let notes = '', questions = '';
+const tutor = () => `You are a patient tutor. The learner is ${$('level').value.toLowerCase()} level. Be accurate; say when something is simplified. Plain text, no markdown tables.`;
+async function run(btn, msgs, onText) {
+  btn.disabled = true; setStatus($('status'), 'Thinking...');
+  try { const r = await Brain.ask(msgs, 2048); onText(r.text.trim()); setStatus($('status'), 'Done.', 'ok'); }
+  catch (e) { setStatus($('status'), errText(e), 'err'); }
+  btn.disabled = false;
+}
+$('explain').addEventListener('click', () => run($('explain'), [
+  { role: 'system', content: tutor() },
+  { role: 'user', content: `Explain "${$('topic').value}". Start with the core idea in two sentences, then a worked example, then three common misconceptions.` },
+], (t) => { notes = t; $('out').hidden = false; $('out').textContent = t; $('keep').disabled = false; }));
+$('quiz').addEventListener('click', () => run($('quiz'), [
+  { role: 'system', content: tutor() },
+  { role: 'user', content: `Write 5 numbered short-answer questions on "${$('topic').value}". Questions only, no answers.` },
+], (t) => { questions = t; $('quizbox').hidden = false; $('questions').textContent = t; $('answers').value = ''; $('feedback').textContent = ''; }));
+$('check').addEventListener('click', () => {
+  if (!$('answers').value.trim()) { setStatus($('status'), 'Write your answers first.', 'err'); return; }
+  run($('check'), [
+    { role: 'system', content: tutor() },
+    { role: 'user', content: `Questions:\n${questions}\n\nMy answers:\n${$('answers').value}\n\nMark each answer right, partly right or wrong, give the correct answer in one or two sentences, and end with a score out of 5.` },
+  ], (t) => { $('feedback').textContent = t; notes += (notes ? '\n\n' : '') + 'Quiz\n' + questions + '\n\nFeedback\n' + t; $('keep').disabled = false; });
+});
+$('keep').addEventListener('click', async () => {
+  $('keep').disabled = true; setStatus($('status'), 'Saving...');
+  try { await Brain.remember('semantic', `Study notes: ${$('topic').value}\n\n${notes}`, { app: 'study-room', topic: $('topic').value }); setStatus($('status'), 'Saved to memory.', 'ok'); }
+  catch (e) { setStatus($('status'), errText(e), 'err'); $('keep').disabled = false; }
+});
+</script>
+</body>
+</html>
