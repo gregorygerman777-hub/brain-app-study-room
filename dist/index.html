@@ -46,7 +46,7 @@ th,td{text-align:left;padding:8px;border-top:1px solid var(--border)}
 <div><label for="level">Level</label><select id="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select></div>
 </div>
 <div class="row"><button class="primary" id="explain">Explain</button><button id="quiz">Quiz me</button><button id="keep" disabled>Save notes to memory</button></div>
-<div class="status" id="status"></div>
+<div class="status" id="status" role="status" aria-live="polite"></div>
 <div class="card out" id="out" hidden></div>
 <div class="card" id="quizbox" hidden>
 <div class="out" id="questions"></div>
